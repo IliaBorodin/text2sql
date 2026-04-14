@@ -96,3 +96,4 @@ cmake-build-*/
 .cpython-312.pyc
 
 __MACOSX
+.venv312
