@@ -3,12 +3,24 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import site
 import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
+
+
+def bootstrap_project_root() -> Path:
+    """Make the project package importable for standalone script execution."""
+
+    project_root = Path(__file__).resolve().parents[1]
+    site.addsitedir(str(project_root))
+    return project_root
+
+
+PROJECT_ROOT = bootstrap_project_root()
 
 from app.core.config import Settings
 from app.core.models import QueryResponse
