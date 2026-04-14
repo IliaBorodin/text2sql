@@ -7,24 +7,30 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment variables and `.env`."""
 
-    db_host: str = Field(validation_alias="DB_HOST")
-    db_port: int = Field(default=5432, validation_alias="DB_PORT")
-    db_name: str = Field(validation_alias="DB_NAME")
-    db_user: str = Field(validation_alias="DB_USER")
-    db_password: SecretStr = Field(validation_alias="DB_PASSWORD")
-    db_schema: str = Field(default="stack", validation_alias="DB_SCHEMA")
+    db_host: str = Field(validation_alias="POSTGRES_HOST")
+    db_port: int = Field(default=5432, validation_alias="POSTGRES_PORT")
+    db_name: str = Field(validation_alias="POSTGRES_DB")
+    db_user: str = Field(validation_alias="POSTGRES_USER")
+    db_password: SecretStr = Field(validation_alias="POSTGRES_PASSWORD")
+    db_schema: str = Field(default="stack", validation_alias="POSTGRES_SCHEMA")
 
     ollama_base_url: str = Field(
         default="http://localhost:11434",
         validation_alias="OLLAMA_BASE_URL",
     )
-    llm_model: str = Field(default="qwen3-coder:30b", validation_alias="LLM_MODEL")
+    llm_model: str = Field(
+        default="qwen3-coder:30b",
+        validation_alias="OLLAMA_LLM_MODEL",
+    )
     embed_model: str = Field(
         default="qwen3-embedding:8b",
-        validation_alias="EMBED_MODEL",
+        validation_alias="OLLAMA_EMBED_MODEL",
     )
 
-    chroma_path: str = Field(default="./data/chroma", validation_alias="CHROMA_PATH")
+    chroma_path: str = Field(
+        default="./data/chroma",
+        validation_alias="CHROMA_PERSIST_DIR",
+    )
 
     xdic_path: str = Field(
         default="./data/xdic/main.xdic",
