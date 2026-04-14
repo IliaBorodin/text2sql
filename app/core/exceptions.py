@@ -17,4 +17,23 @@ class DatabaseError(Text2SQLError):
     """Raised when SQL execution fails."""
 
 
-__all__ = ["DatabaseError", "LLMError", "Text2SQLError"]
+class ValidationError(Text2SQLError):
+    """Raised when user input or intermediate data fails validation."""
+
+
+class SchemaRetrievalError(Text2SQLError):
+    """Raised when database schema metadata cannot be loaded."""
+
+
+class PromptBuildError(Text2SQLError):
+    """Raised when the LLM prompt cannot be assembled."""
+
+
+__all__ = [
+    "DatabaseError",
+    "LLMError",
+    "PromptBuildError",
+    "SchemaRetrievalError",
+    "Text2SQLError",
+    "ValidationError",
+]

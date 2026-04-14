@@ -1,7 +1,14 @@
 """Core exports for convenient imports."""
 
 from app.core.config import Settings
-from app.core.exceptions import DatabaseError, LLMError, Text2SQLError
+from app.core.exceptions import (
+    DatabaseError,
+    LLMError,
+    PromptBuildError,
+    SchemaRetrievalError,
+    Text2SQLError,
+    ValidationError,
+)
 from app.core.interfaces import DatabaseClient, EmbeddingClient, LLMClient, VectorStore
 from app.core.models import (
     GenerationResult,
@@ -24,13 +31,16 @@ __all__ = [
     "LLMClient",
     "LLMError",
     "PipelineTimings",
+    "PromptBuildError",
     "QueryRequest",
     "QueryResponse",
     "SQLResult",
+    "SchemaRetrievalError",
     "SearchResult",
     "Settings",
     "TableContext",
     "Text2SQLError",
+    "ValidationError",
     "ValidationResult",
     "VectorStore",
 ]
