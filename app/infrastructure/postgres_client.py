@@ -37,6 +37,7 @@ class PostgresClient:
             max_overflow=5,
             pool_recycle=3600,
             pool_pre_ping=True,
+            connect_args={"statement_cache_size": 0},
             echo=False,
         )
 
