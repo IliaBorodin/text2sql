@@ -31,6 +31,10 @@ class Settings(BaseSettings):
         default="./data/chroma",
         validation_alias="CHROMA_PERSIST_DIR",
     )
+    chroma_collection: str = Field(
+        default="table_schemas",
+        validation_alias="CHROMA_COLLECTION",
+    )
 
     xdic_path: str = Field(
         default="./data/xdic/main.xdic",

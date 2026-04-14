@@ -39,7 +39,7 @@ XDIC_PATH = os.getenv("XDIC_PATH", str(PROJECT_ROOT / "data" / "xdic" / "main.xd
 CHROMA_DIR = os.getenv("CHROMA_PERSIST_DIR", str(PROJECT_ROOT / "data" / "chroma"))
 OLLAMA_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "qwen3-embedding:8b")
-COLLECTION_NAME = os.getenv("CHROMA_COLLECTION", "schema_tables")
+COLLECTION_NAME = os.getenv("CHROMA_COLLECTION", "table_schemas")
 
 # Размер батча для embedding (сколько таблиц за один запрос к Ollama)
 BATCH_SIZE = 20
@@ -200,6 +200,7 @@ def table_to_metadata(tbl: TableInfo) -> dict:
     fk_tables = [f.referenced_table for f in tbl.fields
                  if f.field_type == "Внешний ключ" and f.referenced_table]
     return {
+        "table_name": tbl.name,
         "name": tbl.name,
         "description": (tbl.description or "")[:500],
         "field_count": len(tbl.fields),
