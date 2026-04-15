@@ -114,6 +114,8 @@ class HealthStatus(BaseModel):
     ollama_available: bool = False
     db_connected: bool = False
     chroma_tables_count: int = 0
+    search_path: str | None = None
+    schema_ok: bool = False
 
 
 __all__ = [

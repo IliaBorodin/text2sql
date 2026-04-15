@@ -6,7 +6,7 @@ import logging
 import time
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
@@ -14,6 +14,11 @@ from app.core.config import Settings
 from app.core.exceptions import DatabaseError
 
 logger = logging.getLogger(__name__)
+
+
+def _quote_ident(identifier: str) -> str:
+    escaped = identifier.replace('"', '""')
+    return f'"{escaped}"'
 
 
 class PostgresClient:
@@ -28,9 +33,14 @@ class PostgresClient:
         self._db_name = settings.db_name
         self._engine: AsyncEngine | None = None
 
+    @property
+    def db_schema(self) -> str:
+        return self._db_schema
+
     async def connect(self) -> None:
         """Create the async engine and verify the database connection."""
 
+        configured_search_path = f"{_quote_ident(self._db_schema)}, public"
         self._engine = create_async_engine(
             self._db_url,
             pool_size=5,
@@ -40,6 +50,14 @@ class PostgresClient:
             connect_args={"statement_cache_size": 0},
             echo=False,
         )
+
+        @event.listens_for(self._engine.sync_engine, "connect")
+        def _set_search_path(dbapi_connection: Any, _: Any) -> None:
+            cursor = dbapi_connection.cursor()
+            try:
+                cursor.execute(f"SET search_path TO {configured_search_path}")
+            finally:
+                cursor.close()
 
         try:
             async with self._engine.begin() as conn:
@@ -62,10 +80,11 @@ class PostgresClient:
             ) from exc
 
         logger.info(
-            "PostgreSQL connected host=%s db=%s schema=%s",
+            "PostgreSQL connected host=%s db=%s schema=%s search_path=%s",
             self._db_host,
             self._db_name,
             self._db_schema,
+            configured_search_path,
         )
 
     async def disconnect(self) -> None:
@@ -141,3 +160,17 @@ class PostgresClient:
             return False
 
         return True
+
+    async def get_search_path(self) -> str | None:
+        """Return the current PostgreSQL search_path for health checks."""
+
+        if self._engine is None:
+            return None
+
+        try:
+            async with self._engine.begin() as conn:
+                result = await conn.execute(text("SHOW search_path"))
+                return result.scalar_one_or_none()
+        except Exception:
+            logger.exception("Failed to read PostgreSQL search_path")
+            return None

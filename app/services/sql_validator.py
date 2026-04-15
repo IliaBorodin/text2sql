@@ -45,6 +45,9 @@ class SQLValidator:
     _SQL_BLOCK_RE = re.compile(r"```sql\s*\n?(.*?)```", re.DOTALL | re.IGNORECASE)
     _GENERIC_BLOCK_RE = re.compile(r"```\s*\n?(.*?)```", re.DOTALL)
     _SELECT_RE = re.compile(r"(SELECT\b.*?)(?:;|$)", re.DOTALL | re.IGNORECASE)
+    _UNQUALIFIED_CYRILLIC_TABLE_RE = re.compile(
+        r'(?i)\b(?:FROM|JOIN)\s+"(?P<name>[а-яА-ЯёЁ][^"]*)"'
+    )
 
     def __init__(self, default_limit: int = 100):
         self._default_limit = default_limit
@@ -159,6 +162,15 @@ class SQLValidator:
                     if name and self._contains_cyrillic(name) and not quoted:
                         warnings.append(f"Идентификатор без кавычек: {name}")
 
+            unqualified_tables = self._find_unqualified_cyrillic_tables(sql_clean)
+            if unqualified_tables:
+                warning_message = (
+                    "Кириллические таблицы без явной схемы: "
+                    + ", ".join(f'"{table}"' for table in unqualified_tables)
+                )
+                warnings.append(warning_message)
+                logger.warning("%s; SQL=%s", warning_message, sql_clean)
+
             return ValidationResult(
                 is_valid=len(errors) == 0,
                 original_sql=sql,
@@ -260,3 +272,15 @@ class SQLValidator:
         )
 
         return fixed
+
+    def _find_unqualified_cyrillic_tables(self, sql: str) -> list[str]:
+        sql_without_strings = self._strip_string_literals(sql)
+        matches = self._UNQUALIFIED_CYRILLIC_TABLE_RE.findall(sql_without_strings)
+        seen: set[str] = set()
+        result: list[str] = []
+        for name in matches:
+            cleaned = name.strip()
+            if cleaned and cleaned not in seen:
+                seen.add(cleaned)
+                result.append(cleaned)
+        return result
