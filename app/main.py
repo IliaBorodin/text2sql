@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes.health import router as health_router
 from app.api.routes.query import router as query_router
@@ -27,6 +29,7 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
 @asynccontextmanager
@@ -108,6 +111,7 @@ app.add_middleware(
 
 app.include_router(query_router, prefix="/api")
 app.include_router(health_router, prefix="/api")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/")

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -95,6 +95,24 @@ class QueryResponse(BaseModel):
     success: bool = False
 
 
+class QueryProgressEvent(BaseModel):
+    """Pipeline progress event for streaming responses."""
+
+    model_config = ConfigDict()
+
+    phase: Literal[
+        "retrieval",
+        "generation",
+        "validation",
+        "execution",
+        "done",
+        "error",
+    ]
+    message: str
+    data: dict[str, Any] = Field(default_factory=dict)
+    response: QueryResponse | None = None
+
+
 class SearchResult(BaseModel):
     """A vector store search hit."""
 
@@ -122,6 +140,7 @@ __all__ = [
     "GenerationResult",
     "HealthStatus",
     "PipelineTimings",
+    "QueryProgressEvent",
     "QueryRequest",
     "QueryResponse",
     "SQLResult",

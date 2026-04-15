@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
-from app.core.models import QueryRequest, QueryResponse
+from app.core.models import QueryProgressEvent, QueryRequest, QueryResponse
 from app.services.pipeline import Pipeline
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,34 @@ def _sanitize_rows(rows: list[dict]) -> list[dict]:
     return sanitized_rows
 
 
+def _serialize_query_response(response: QueryResponse) -> dict[str, Any]:
+    payload = response.model_dump(mode="python")
+    result = response.result
+    if result is not None:
+        payload["result"] = {
+            "columns": result.columns,
+            "rows": _sanitize_rows(result.rows),
+            "row_count": result.row_count,
+            "execution_time_ms": result.execution_time_ms,
+        }
+    return payload
+
+
+def _serialize_progress_event(event: QueryProgressEvent) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "phase": event.phase,
+        "message": event.message,
+        "data": event.data,
+    }
+    if event.response is not None:
+        payload["response"] = _serialize_query_response(event.response)
+    return payload
+
+
+def _format_sse(event_name: str, payload: dict[str, Any]) -> str:
+    return f"event: {event_name}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
 @router.post("/query")
 async def query(body: QueryRequest, request: Request) -> QueryResponse:
     pipeline: Pipeline = request.app.state.pipeline
@@ -54,14 +83,26 @@ async def query(body: QueryRequest, request: Request) -> QueryResponse:
     else:
         logger.warning("Ошибка: %s", response.error)
 
-    payload = response.model_dump(mode="python")
-    result = response.result
-    if result is not None:
-        payload["result"] = {
-            "columns": result.columns,
-            "rows": _sanitize_rows(result.rows),
-            "row_count": result.row_count,
-            "execution_time_ms": result.execution_time_ms,
-        }
+    return JSONResponse(content=_serialize_query_response(response))
 
-    return JSONResponse(content=payload)
+
+@router.post("/query/stream")
+async def query_stream(body: QueryRequest, request: Request) -> StreamingResponse:
+    pipeline: Pipeline = request.app.state.pipeline
+
+    logger.info("SSE запрос: %s", body.question[:100])
+
+    async def event_stream():
+        async for event in pipeline.execute_with_progress(body.question):
+            event_name = "done" if event.phase == "done" else "error" if event.phase == "error" else "progress"
+            yield _format_sse(event_name, _serialize_progress_event(event))
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
