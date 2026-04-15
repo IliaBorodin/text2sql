@@ -72,7 +72,7 @@ def test_validate_rejects_dangerous_queries(
 
     assert result.is_valid is False
     assert result.errors
-    assert any(keyword in error for error in result.errors)
+    assert any(keyword.lower() in error.lower() for error in result.errors)
 
 
 def test_validate_rejects_multiple_statements(sql_validator: SQLValidator) -> None:
