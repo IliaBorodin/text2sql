@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routes.health import router as health_router
@@ -116,4 +117,4 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/")
 async def root():
-    return {"service": "Text2SQL ЖКХ", "version": "0.1.0", "docs": "/docs"}
+    return RedirectResponse(url="/static/index.html", status_code=307)

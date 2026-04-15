@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Text2SQL Chat</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1220;
+      --bg-elevated: rgba(15, 23, 42, 0.86);
+      --panel: rgba(15, 23, 42, 0.94);
+      --panel-border: rgba(148, 163, 184, 0.18);
+      --text: #e5eefb;
+      --muted: #93a4bf;
+      --accent: #38bdf8;
+      --accent-strong: #0ea5e9;
+      --success: #22c55e;
+      --error: #f87171;
+      --warning: #fbbf24;
+      --shadow: 0 24px 80px rgba(2, 6, 23, 0.45);
+      --radius-lg: 22px;
+      --radius-md: 16px;
+      --radius-sm: 12px;
+      --mono: "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+      --sans: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--sans);
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(14, 165, 233, 0.16), transparent 28%),
+        radial-gradient(circle at top right, rgba(34, 197, 94, 0.12), transparent 24%),
+        linear-gradient(180deg, #0f172a 0%, #0b1220 100%);
+    }
+
+    .app {
+      width: min(1200px, calc(100vw - 48px));
+      margin: 28px auto;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 18px;
+      min-height: calc(100vh - 56px);
+    }
+
+    .hero,
+    .composer,
+    .chat {
+      backdrop-filter: blur(18px);
+      background: var(--bg-elevated);
+      border: 1px solid var(--panel-border);
+      box-shadow: var(--shadow);
+    }
+
+    .hero {
+      border-radius: var(--radius-lg);
+      padding: 24px 28px;
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: end;
+    }
+
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 4vw, 42px);
+      line-height: 1.02;
+      letter-spacing: -0.03em;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 720px;
+      font-size: 15px;
+    }
+
+    .hero-meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .pill {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.12);
+      color: #d8f3ff;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .chat {
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      overflow: auto;
+      scroll-behavior: smooth;
+    }
+
+    .chat-empty {
+      min-height: 280px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed rgba(148, 163, 184, 0.18);
+      border-radius: var(--radius-md);
+      background: rgba(15, 23, 42, 0.48);
+    }
+
+    .messages {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .message {
+      display: flex;
+    }
+
+    .message.user {
+      justify-content: flex-end;
+    }
+
+    .bubble {
+      width: min(100%, 920px);
+      border-radius: var(--radius-md);
+      padding: 18px 18px 16px;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      background: var(--panel);
+    }
+
+    .message.user .bubble {
+      width: min(80%, 740px);
+      background: linear-gradient(135deg, rgba(14, 165, 233, 0.26), rgba(14, 165, 233, 0.14));
+      border-color: rgba(56, 189, 248, 0.28);
+    }
+
+    .message-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .message-title {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .message-text {
+      white-space: pre-wrap;
+      line-height: 1.55;
+      word-break: break-word;
+    }
+
+    .status-row,
+    .timings,
+    .phase-list,
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .status-row {
+      margin-bottom: 12px;
+      align-items: center;
+    }
+
+    .badge {
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      background: rgba(148, 163, 184, 0.14);
+      color: var(--text);
+    }
+
+    .badge.success { background: rgba(34, 197, 94, 0.14); color: #c9fbd9; }
+    .badge.error { background: rgba(248, 113, 113, 0.14); color: #ffd3d3; }
+    .badge.pending { background: rgba(251, 191, 36, 0.14); color: #fde68a; }
+
+    .phase-list {
+      margin: 10px 0 16px;
+    }
+
+    .phase-item {
+      padding: 9px 12px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .phase-item.active {
+      color: var(--text);
+      border-color: rgba(56, 189, 248, 0.35);
+      box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.14);
+    }
+
+    .phase-item.done {
+      color: #d1fae5;
+      border-color: rgba(34, 197, 94, 0.35);
+      background: rgba(34, 197, 94, 0.1);
+    }
+
+    .section {
+      margin-top: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      background: rgba(15, 23, 42, 0.72);
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .section-title {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .toolbar button,
+    .composer button {
+      border: 0;
+      cursor: pointer;
+      transition: transform 160ms ease, opacity 160ms ease, background 160ms ease;
+    }
+
+    .toolbar button {
+      padding: 8px 11px;
+      border-radius: 10px;
+      background: rgba(56, 189, 248, 0.12);
+      color: #d8f3ff;
+    }
+
+    .toolbar button:hover,
+    .composer button:hover {
+      transform: translateY(-1px);
+    }
+
+    .toolbar button:disabled,
+    .composer button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    pre {
+      margin: 0;
+      padding: 16px;
+      overflow: auto;
+      font: 13px/1.5 var(--mono);
+      color: #dbeafe;
+    }
+
+    .table-wrap {
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 420px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 11px 12px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      text-align: left;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: rgba(15, 23, 42, 0.96);
+      color: #c9d8ef;
+      font-weight: 600;
+    }
+
+    td {
+      color: #e7edf8;
+    }
+
+    .empty-result,
+    .error-box {
+      padding: 14px 16px;
+      line-height: 1.5;
+    }
+
+    .empty-result {
+      color: var(--muted);
+    }
+
+    .error-box {
+      color: #ffd9d9;
+      background: rgba(127, 29, 29, 0.24);
+    }
+
+    .timings {
+      margin-top: 14px;
+    }
+
+    .timing {
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      min-width: 132px;
+    }
+
+    .timing-label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .timing-value {
+      font-family: var(--mono);
+      font-size: 14px;
+    }
+
+    .composer {
+      border-radius: var(--radius-lg);
+      padding: 18px;
+    }
+
+    .composer-form {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: end;
+    }
+
+    .composer textarea {
+      width: 100%;
+      min-height: 68px;
+      max-height: 220px;
+      resize: vertical;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 16px;
+      background: rgba(15, 23, 42, 0.92);
+      color: var(--text);
+      padding: 16px 18px;
+      font: inherit;
+      line-height: 1.5;
+      outline: none;
+    }
+
+    .composer textarea:focus {
+      border-color: rgba(56, 189, 248, 0.48);
+      box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.12);
+    }
+
+    .composer button {
+      height: 54px;
+      min-width: 150px;
+      padding: 0 20px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+      color: white;
+      font-weight: 700;
+      font-size: 15px;
+    }
+
+    .composer-footer {
+      margin-top: 10px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .loading {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .loading::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.45);
+      animation: pulse 1.2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.45); }
+      70% { box-shadow: 0 0 0 12px rgba(56, 189, 248, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+    }
+
+    @media (max-width: 900px) {
+      .app {
+        width: min(100vw - 24px, 1200px);
+        margin: 12px auto;
+        min-height: calc(100vh - 24px);
+      }
+
+      .hero {
+        padding: 20px;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .composer-form {
+        grid-template-columns: 1fr;
+      }
+
+      .composer button {
+        width: 100%;
+      }
+
+      .message.user .bubble {
+        width: min(100%, 740px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hero">
+      <div>
+        <h1>Text2SQL Chat</h1>
+        <p>Задайте вопрос по данным ЖКХ. Интерфейс покажет прогресс пайплайна, итоговый SQL, тайминги и результат запроса в виде таблицы.</p>
+      </div>
+      <div class="hero-meta">
+        <span class="pill">`POST /api/query/stream`</span>
+        <span class="pill">SSE + fallback</span>
+      </div>
+    </section>
+
+    <section class="chat" id="chatPanel">
+      <div class="chat-empty" id="emptyState">
+        <div>
+          <strong>История запросов появится здесь.</strong>
+          <p>Например: «Сколько лицевых счетов в базе?»</p>
+        </div>
+      </div>
+      <div class="messages" id="messages" hidden></div>
+    </section>
+
+    <section class="composer">
+      <form class="composer-form" id="queryForm">
+        <label for="question" class="sr-only" hidden>Ваш вопрос</label>
+        <textarea id="question" name="question" placeholder="Например: Сколько лицевых счетов в базе?" required></textarea>
+        <button type="submit" id="submitButton">Отправить</button>
+      </form>
+      <div class="composer-footer">
+        <span>Enter отправляет запрос, Shift+Enter добавляет новую строку.</span>
+        <span id="requestState">Готов к запросу</span>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const PHASE_ORDER = ["retrieval", "generation", "validation", "execution", "done"];
+    const PHASE_LABELS = {
+      retrieval: "Поиск таблиц",
+      generation: "Генерация SQL",
+      validation: "Валидация",
+      execution: "Выполнение",
+      done: "Готово",
+      error: "Ошибка"
+    };
+
+    const TIMING_LABELS = {
+      schema_retrieval_ms: "Поиск таблиц",
+      prompt_build_ms: "Сборка промта",
+      llm_generation_ms: "Генерация SQL",
+      validation_ms: "Валидация",
+      execution_ms: "Выполнение",
+      total_ms: "Итого"
+    };
+
+    const messagesEl = document.getElementById("messages");
+    const emptyStateEl = document.getElementById("emptyState");
+    const formEl = document.getElementById("queryForm");
+    const questionEl = document.getElementById("question");
+    const submitButtonEl = document.getElementById("submitButton");
+    const requestStateEl = document.getElementById("requestState");
+    const chatPanelEl = document.getElementById("chatPanel");
+
+    let isPending = false;
+
+    questionEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        formEl.requestSubmit();
+      }
+    });
+
+    formEl.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (isPending) {
+        return;
+      }
+
+      const question = questionEl.value.trim();
+      if (!question) {
+        questionEl.focus();
+        return;
+      }
+
+      addUserMessage(question);
+      const systemMessage = createSystemMessage(question);
+      setPending(true);
+
+      try {
+        await runStreamingQuery(question, systemMessage);
+      } catch (streamError) {
+        systemMessage.transportEl.textContent = "Стрим недоступен, переключаемся на обычный запрос.";
+        try {
+          const response = await runFallbackQuery(question);
+          applyFinalResponse(systemMessage, response, false);
+        } catch (fallbackError) {
+          applyError(systemMessage, extractErrorMessage(fallbackError));
+        }
+      } finally {
+        setPending(false);
+        questionEl.value = "";
+        questionEl.focus();
+        scrollChatToBottom();
+      }
+    });
+
+    function setPending(nextPending) {
+      isPending = nextPending;
+      submitButtonEl.disabled = nextPending;
+      questionEl.disabled = nextPending;
+      requestStateEl.innerHTML = nextPending
+        ? '<span class="loading">Выполняется запрос</span>'
+        : "Готов к запросу";
+    }
+
+    function ensureMessagesVisible() {
+      emptyStateEl.hidden = true;
+      messagesEl.hidden = false;
+    }
+
+    function addUserMessage(text) {
+      ensureMessagesVisible();
+      const wrapper = document.createElement("article");
+      wrapper.className = "message user";
+      wrapper.innerHTML = `
+        <div class="bubble">
+          <div class="message-meta">
+            <span class="message-title">Вы</span>
+            <span>${formatNow()}</span>
+          </div>
+          <div class="message-text"></div>
+        </div>
+      `;
+      wrapper.querySelector(".message-text").textContent = text;
+      messagesEl.appendChild(wrapper);
+      scrollChatToBottom();
+    }
+
+    function createSystemMessage(question) {
+      ensureMessagesVisible();
+      const wrapper = document.createElement("article");
+      wrapper.className = "message system";
+      wrapper.innerHTML = `
+        <div class="bubble">
+          <div class="message-meta">
+            <span class="message-title">Система</span>
+            <span>${formatNow()}</span>
+          </div>
+          <div class="status-row">
+            <span class="badge pending" data-role="status">В процессе</span>
+            <span data-role="headline">Ожидание ответа от сервиса</span>
+          </div>
+          <div class="phase-list" data-role="phases"></div>
+          <div class="message-text" data-role="transport">Подключаемся к /api/query/stream…</div>
+          <div class="section" data-role="sqlSection" hidden>
+            <div class="section-header">
+              <span class="section-title">SQL</span>
+              <div class="toolbar">
+                <button type="button" data-role="copySql">Скопировать</button>
+              </div>
+            </div>
+            <pre data-role="sqlContent"></pre>
+          </div>
+          <div class="section" data-role="resultSection" hidden>
+            <div class="section-header">
+              <span class="section-title">Результат</span>
+              <span data-role="resultMeta"></span>
+            </div>
+            <div data-role="resultContent"></div>
+          </div>
+          <div class="section" data-role="errorSection" hidden>
+            <div class="section-header">
+              <span class="section-title">Ошибка</span>
+            </div>
+            <div class="error-box" data-role="errorContent"></div>
+          </div>
+          <div class="timings" data-role="timings"></div>
+        </div>
+      `;
+
+      const systemMessage = {
+        wrapper,
+        question,
+        badgeEl: wrapper.querySelector('[data-role="status"]'),
+        headlineEl: wrapper.querySelector('[data-role="headline"]'),
+        transportEl: wrapper.querySelector('[data-role="transport"]'),
+        phasesEl: wrapper.querySelector('[data-role="phases"]'),
+        sqlSectionEl: wrapper.querySelector('[data-role="sqlSection"]'),
+        sqlContentEl: wrapper.querySelector('[data-role="sqlContent"]'),
+        copySqlEl: wrapper.querySelector('[data-role="copySql"]'),
+        resultSectionEl: wrapper.querySelector('[data-role="resultSection"]'),
+        resultMetaEl: wrapper.querySelector('[data-role="resultMeta"]'),
+        resultContentEl: wrapper.querySelector('[data-role="resultContent"]'),
+        errorSectionEl: wrapper.querySelector('[data-role="errorSection"]'),
+        errorContentEl: wrapper.querySelector('[data-role="errorContent"]'),
+        timingsEl: wrapper.querySelector('[data-role="timings"]'),
+        phaseState: {}
+      };
+
+      renderPhases(systemMessage, null, false);
+      systemMessage.copySqlEl.addEventListener("click", async () => {
+        const sql = systemMessage.sqlContentEl.textContent || "";
+        if (!sql) {
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(sql);
+          systemMessage.copySqlEl.textContent = "Скопировано";
+          window.setTimeout(() => {
+            systemMessage.copySqlEl.textContent = "Скопировать";
+          }, 1400);
+        } catch (_) {
+          systemMessage.copySqlEl.textContent = "Не удалось";
+          window.setTimeout(() => {
+            systemMessage.copySqlEl.textContent = "Скопировать";
+          }, 1400);
+        }
+      });
+
+      messagesEl.appendChild(wrapper);
+      scrollChatToBottom();
+      return systemMessage;
+    }
+
+    async function runStreamingQuery(question, systemMessage) {
+      const response = await fetch("/api/query/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+        body: JSON.stringify({ question })
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`SSE endpoint returned ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() || "";
+
+        for (const part of parts) {
+          const parsed = parseSseChunk(part);
+          if (!parsed) {
+            continue;
+          }
+          handleSseEvent(parsed.event, parsed.data, systemMessage);
+        }
+      }
+
+      if (buffer.trim()) {
+        const parsed = parseSseChunk(buffer);
+        if (parsed) {
+          handleSseEvent(parsed.event, parsed.data, systemMessage);
+        }
+      }
+    }
+
+    function parseSseChunk(chunk) {
+      const lines = chunk.split("\n");
+      let event = "message";
+      const dataLines = [];
+
+      for (const line of lines) {
+        if (line.startsWith("event:")) {
+          event = line.slice(6).trim();
+        } else if (line.startsWith("data:")) {
+          dataLines.push(line.slice(5).trimStart());
+        }
+      }
+
+      if (!dataLines.length) {
+        return null;
+      }
+
+      return {
+        event,
+        data: JSON.parse(dataLines.join("\n"))
+      };
+    }
+
+    function handleSseEvent(eventName, payload, systemMessage) {
+      const phase = payload.phase || "error";
+      systemMessage.transportEl.textContent = payload.message || "Получено обновление";
+      renderPhases(systemMessage, phase, eventName === "done");
+
+      const phaseDuration = payload.data && typeof payload.data.duration_ms === "number"
+        ? `${formatMs(payload.data.duration_ms)} • ${PHASE_LABELS[phase] || phase}`
+        : (PHASE_LABELS[phase] || phase);
+      systemMessage.headlineEl.textContent = phaseDuration;
+
+      const candidateSql =
+        payload.response && payload.response.sql
+          ? payload.response.sql
+          : payload.data && payload.data.sql
+            ? payload.data.sql
+            : "";
+      if (candidateSql) {
+        renderSql(systemMessage, candidateSql);
+      }
+
+      if (eventName === "error") {
+        const response = payload.response || { error: payload.message, success: false, question: systemMessage.question };
+        applyFinalResponse(systemMessage, response, true);
+        return;
+      }
+
+      if (eventName === "done") {
+        applyFinalResponse(systemMessage, payload.response, false);
+      }
+    }
+
+    async function runFallbackQuery(question) {
+      const response = await fetch("/api/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ question })
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `Request failed with ${response.status}`);
+      }
+
+      return response.json();
+    }
+
+    function applyFinalResponse(systemMessage, response, isErrorEvent) {
+      const success = Boolean(response && response.success);
+      const hasError = !success || isErrorEvent;
+
+      systemMessage.badgeEl.className = `badge ${hasError ? "error" : "success"}`;
+      systemMessage.badgeEl.textContent = hasError ? "Ошибка" : "Успех";
+      systemMessage.headlineEl.textContent = hasError
+        ? "Запрос завершился с ошибкой"
+        : "Запрос выполнен успешно";
+
+      const sql = response && response.sql ? response.sql : "";
+      if (sql) {
+        renderSql(systemMessage, sql);
+      }
+
+      renderResult(systemMessage, response && response.result ? response.result : null);
+      renderTimings(systemMessage, response && response.timings ? response.timings : null);
+
+      if (response && response.error) {
+        systemMessage.errorSectionEl.hidden = false;
+        systemMessage.errorContentEl.textContent = response.error;
+      } else {
+        systemMessage.errorSectionEl.hidden = true;
+        systemMessage.errorContentEl.textContent = "";
+      }
+
+      if (hasError) {
+        renderPhases(systemMessage, "error", true);
+        systemMessage.transportEl.textContent = response && response.error
+          ? response.error
+          : "Во время выполнения произошла ошибка.";
+      } else {
+        renderPhases(systemMessage, "done", true);
+        systemMessage.transportEl.textContent = "Ответ готов.";
+      }
+    }
+
+    function applyError(systemMessage, message) {
+      applyFinalResponse(systemMessage, {
+        question: systemMessage.question,
+        sql: systemMessage.sqlContentEl.textContent || null,
+        result: null,
+        timings: null,
+        error: message,
+        success: false
+      }, true);
+    }
+
+    function renderSql(systemMessage, sql) {
+      systemMessage.sqlSectionEl.hidden = false;
+      systemMessage.sqlContentEl.textContent = sql;
+    }
+
+    function renderResult(systemMessage, result) {
+      systemMessage.resultSectionEl.hidden = false;
+
+      if (!result) {
+        systemMessage.resultMetaEl.textContent = "";
+        systemMessage.resultContentEl.innerHTML = '<div class="empty-result">Нет данных для отображения.</div>';
+        return;
+      }
+
+      systemMessage.resultMetaEl.textContent = `${result.row_count} строк • ${formatMs(result.execution_time_ms)}`;
+
+      if (!Array.isArray(result.rows) || !result.rows.length) {
+        systemMessage.resultContentEl.innerHTML = '<div class="empty-result">Запрос выполнен, но вернул пустой результат.</div>';
+        return;
+      }
+
+      const columns = Array.isArray(result.columns) && result.columns.length
+        ? result.columns
+        : Object.keys(result.rows[0]);
+
+      const thead = columns.map((column) => `<th>${escapeHtml(String(column))}</th>`).join("");
+      const tbody = result.rows.map((row) => {
+        const cells = columns.map((column) => `<td>${formatCellValue(row[column])}</td>`).join("");
+        return `<tr>${cells}</tr>`;
+      }).join("");
+
+      systemMessage.resultContentEl.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr>${thead}</tr></thead>
+            <tbody>${tbody}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderTimings(systemMessage, timings) {
+      systemMessage.timingsEl.innerHTML = "";
+      if (!timings) {
+        return;
+      }
+
+      Object.entries(TIMING_LABELS).forEach(([key, label]) => {
+        const value = timings[key];
+        if (typeof value !== "number" || value <= 0) {
+          return;
+        }
+
+        const item = document.createElement("div");
+        item.className = "timing";
+        item.innerHTML = `
+          <span class="timing-label">${label}</span>
+          <span class="timing-value">${formatMs(value)}</span>
+        `;
+        systemMessage.timingsEl.appendChild(item);
+      });
+    }
+
+    function renderPhases(systemMessage, activePhase, isTerminal) {
+      systemMessage.phasesEl.innerHTML = "";
+
+      PHASE_ORDER.forEach((phase) => {
+        const phaseEl = document.createElement("div");
+        let className = "phase-item";
+        const activeIndex = PHASE_ORDER.indexOf(activePhase);
+        const currentIndex = PHASE_ORDER.indexOf(phase);
+
+        if (activePhase === "error") {
+          className += currentIndex < PHASE_ORDER.length - 1 ? " done" : "";
+        } else if (activeIndex >= 0 && currentIndex < activeIndex) {
+          className += " done";
+        } else if (phase === activePhase && !isTerminal) {
+          className += " active";
+        } else if (phase === "done" && (activePhase === "done" || isTerminal)) {
+          className += " done";
+        }
+
+        phaseEl.className = className;
+        phaseEl.textContent = PHASE_LABELS[phase];
+        systemMessage.phasesEl.appendChild(phaseEl);
+      });
+    }
+
+    function formatCellValue(value) {
+      if (value === null || typeof value === "undefined") {
+        return '<span style="color: var(--muted);">NULL</span>';
+      }
+      if (typeof value === "object") {
+        return escapeHtml(JSON.stringify(value));
+      }
+      return escapeHtml(String(value));
+    }
+
+    function formatMs(value) {
+      return `${Number(value).toFixed(0)} мс`;
+    }
+
+    function formatNow() {
+      return new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function extractErrorMessage(error) {
+      if (error instanceof Error && error.message) {
+        return error.message;
+      }
+      return "Не удалось выполнить запрос.";
+    }
+
+    function scrollChatToBottom() {
+      chatPanelEl.scrollTop = chatPanelEl.scrollHeight;
+    }
+
+    function escapeHtml(value) {
+      return value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+  </script>
+</body>
+</html>
