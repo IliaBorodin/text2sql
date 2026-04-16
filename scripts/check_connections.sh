@@ -30,76 +30,167 @@ check_command() {
   fi
 }
 
-print_section "Environment"
-printf 'PROJECT_ROOT=%s\n' "${PROJECT_ROOT}"
-printf 'ENV_FILE=%s\n' "${ENV_FILE}"
-printf 'POSTGRES_HOST=%s\n' "${POSTGRES_HOST:-<missing>}"
-printf 'POSTGRES_PORT=%s\n' "${POSTGRES_PORT}"
-printf 'POSTGRES_DB=%s\n' "${POSTGRES_DB:-<missing>}"
-printf 'POSTGRES_USER=%s\n' "${POSTGRES_USER:-<missing>}"
-printf 'POSTGRES_SCHEMA=%s\n' "${POSTGRES_SCHEMA}"
-printf 'OLLAMA_BASE_URL=%s\n' "${OLLAMA_BASE_URL}"
-printf 'OLLAMA_LLM_MODEL=%s\n' "${OLLAMA_LLM_MODEL}"
-printf 'OLLAMA_EMBED_MODEL=%s\n' "${OLLAMA_EMBED_MODEL}"
+require_postgres_env() {
+  if [[ -z "${POSTGRES_HOST:-}" || -z "${POSTGRES_DB:-}" || -z "${POSTGRES_USER:-}" || -z "${POSTGRES_PASSWORD:-}" ]]; then
+    print_section "PostgreSQL"
+    printf 'Missing one of required variables: POSTGRES_HOST, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD\n'
+    exit 1
+  fi
+}
 
-print_section "Prerequisites"
-check_command curl || exit 1
-check_command psql || exit 1
+show_environment() {
+  print_section "Environment"
+  printf 'PROJECT_ROOT=%s\n' "${PROJECT_ROOT}"
+  printf 'ENV_FILE=%s\n' "${ENV_FILE}"
+  printf 'POSTGRES_HOST=%s\n' "${POSTGRES_HOST:-<missing>}"
+  printf 'POSTGRES_PORT=%s\n' "${POSTGRES_PORT}"
+  printf 'POSTGRES_DB=%s\n' "${POSTGRES_DB:-<missing>}"
+  printf 'POSTGRES_USER=%s\n' "${POSTGRES_USER:-<missing>}"
+  printf 'POSTGRES_SCHEMA=%s\n' "${POSTGRES_SCHEMA}"
+  printf 'OLLAMA_BASE_URL=%s\n' "${OLLAMA_BASE_URL}"
+  printf 'OLLAMA_LLM_MODEL=%s\n' "${OLLAMA_LLM_MODEL}"
+  printf 'OLLAMA_EMBED_MODEL=%s\n' "${OLLAMA_EMBED_MODEL}"
+}
 
-print_section "Ollama models"
-curl -sS "${OLLAMA_BASE_URL}/api/tags"
-printf '\n'
+check_prerequisites() {
+  print_section "Prerequisites"
+  check_command curl || exit 1
+  check_command psql || exit 1
+}
 
-print_section "LLM test"
-curl -sS "${OLLAMA_BASE_URL}/api/chat" \
-  -H 'Content-Type: application/json' \
-  -d "{
-    \"model\": \"${OLLAMA_LLM_MODEL}\",
-    \"messages\": [{\"role\": \"user\", \"content\": \"ping\"}],
-    \"stream\": false
-  }"
-printf '\n'
+check_ollama_models() {
+  print_section "Ollama models"
+  curl -sS "${OLLAMA_BASE_URL}/api/tags"
+  printf '\n'
+}
 
-print_section "Embedding test"
-curl -sS "${OLLAMA_BASE_URL}/api/embed" \
-  -H 'Content-Type: application/json' \
-  -d "{
-    \"model\": \"${OLLAMA_EMBED_MODEL}\",
-    \"input\": \"ping\"
-  }"
-printf '\n'
+check_ollama_llm() {
+  print_section "LLM test"
+  curl -sS "${OLLAMA_BASE_URL}/api/chat" \
+    -H 'Content-Type: application/json' \
+    -d "{
+      \"model\": \"${OLLAMA_LLM_MODEL}\",
+      \"messages\": [{\"role\": \"user\", \"content\": \"ping\"}],
+      \"stream\": false
+    }"
+  printf '\n'
+}
 
-if [[ -z "${POSTGRES_HOST:-}" || -z "${POSTGRES_DB:-}" || -z "${POSTGRES_USER:-}" || -z "${POSTGRES_PASSWORD:-}" ]]; then
+check_ollama_embed() {
+  print_section "Embedding test"
+  curl -sS "${OLLAMA_BASE_URL}/api/embed" \
+    -H 'Content-Type: application/json' \
+    -d "{
+      \"model\": \"${OLLAMA_EMBED_MODEL}\",
+      \"input\": \"ping\"
+    }"
+  printf '\n'
+}
+
+check_postgres_connection() {
+  require_postgres_env
+  print_section "PostgreSQL SELECT 1"
+  PGPASSWORD="${POSTGRES_PASSWORD}" \
+  psql \
+    -h "${POSTGRES_HOST}" \
+    -p "${POSTGRES_PORT}" \
+    -U "${POSTGRES_USER}" \
+    -d "${POSTGRES_DB}" \
+    -c "SELECT 1;"
+}
+
+check_postgres_search_path() {
+  require_postgres_env
+  print_section "PostgreSQL search_path"
+  PGPASSWORD="${POSTGRES_PASSWORD}" \
+  PGOPTIONS="-c search_path=${POSTGRES_SCHEMA},public" \
+  psql \
+    -h "${POSTGRES_HOST}" \
+    -p "${POSTGRES_PORT}" \
+    -U "${POSTGRES_USER}" \
+    -d "${POSTGRES_DB}" \
+    -c "SHOW search_path;"
+}
+
+check_postgres_table() {
+  require_postgres_env
+  print_section "PostgreSQL table check"
+  PGPASSWORD="${POSTGRES_PASSWORD}" \
+  PGOPTIONS="-c search_path=${POSTGRES_SCHEMA},public" \
+  psql \
+    -h "${POSTGRES_HOST}" \
+    -p "${POSTGRES_PORT}" \
+    -U "${POSTGRES_USER}" \
+    -d "${POSTGRES_DB}" \
+    -c 'SELECT COUNT(*) FROM "Лицевые счета";'
+}
+
+run_all() {
+  show_environment
+  check_prerequisites
+  check_ollama_models
+  check_ollama_llm
+  check_ollama_embed
+  check_postgres_connection
+  check_postgres_search_path
+  check_postgres_table
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  bash scripts/check_connections.sh <command>
+
+Commands:
+  all                 Run all checks
+  env                 Show resolved environment
+  prereqs             Check required commands
+  ollama-models       List models from Ollama
+  ollama-llm          Run a simple LLM request
+  ollama-embed        Run a simple embedding request
+  pg-connect          Check PostgreSQL with SELECT 1
+  pg-search-path      Check PostgreSQL search_path
+  pg-table            Check table "Лицевые счета"
+EOF
+}
+
+COMMAND="${1:-all}"
+
+case "${COMMAND}" in
+  all)
+    run_all
+    ;;
+  env)
+    show_environment
+    ;;
+  prereqs)
+    check_prerequisites
+    ;;
+  ollama-models)
+    check_ollama_models
+    ;;
+  ollama-llm)
+    check_ollama_llm
+    ;;
+  ollama-embed)
+    check_ollama_embed
+    ;;
+  pg-connect)
+    check_postgres_connection
+    ;;
+  pg-search-path)
+    check_postgres_search_path
+    ;;
+  pg-table)
+    check_postgres_table
+    ;;
+  help|-h|--help)
+    usage
+    ;;
+  *)
   print_section "PostgreSQL"
-  printf 'Missing one of required variables: POSTGRES_HOST, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD\n'
-  exit 1
-fi
-
-print_section "PostgreSQL SELECT 1"
-PGPASSWORD="${POSTGRES_PASSWORD}" \
-psql \
-  -h "${POSTGRES_HOST}" \
-  -p "${POSTGRES_PORT}" \
-  -U "${POSTGRES_USER}" \
-  -d "${POSTGRES_DB}" \
-  -c "SELECT 1;"
-
-print_section "PostgreSQL search_path"
-PGPASSWORD="${POSTGRES_PASSWORD}" \
-PGOPTIONS="-c search_path=${POSTGRES_SCHEMA},public" \
-psql \
-  -h "${POSTGRES_HOST}" \
-  -p "${POSTGRES_PORT}" \
-  -U "${POSTGRES_USER}" \
-  -d "${POSTGRES_DB}" \
-  -c "SHOW search_path;"
-
-print_section "PostgreSQL table check"
-PGPASSWORD="${POSTGRES_PASSWORD}" \
-PGOPTIONS="-c search_path=${POSTGRES_SCHEMA},public" \
-psql \
-  -h "${POSTGRES_HOST}" \
-  -p "${POSTGRES_PORT}" \
-  -U "${POSTGRES_USER}" \
-  -d "${POSTGRES_DB}" \
-  -c 'SELECT COUNT(*) FROM "Лицевые счета";'
+    printf 'Unknown command: %s\n\n' "${COMMAND}"
+    usage
+    exit 1
+    ;;
+esac
